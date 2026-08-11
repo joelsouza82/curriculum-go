@@ -10,6 +10,7 @@ API RESTful em **Go**, migrada do projeto [`go-api`](https://github.com/joelsouz
 - **Linguagem:** [Go (Golang)](https://go.dev/) (v1.26+)
 - **Framework Web:** [Gin Gonic](https://github.com/gin-gonic/gin) — usado apenas no adapter de entrada HTTP.
 - **Banco de Dados:** [PostgreSQL](https://www.postgresql.org/), acessado via `database/sql` + driver `github.com/lib/pq` no adapter de saída.
+- **Configuração:** [`github.com/joho/godotenv`](https://github.com/joho/godotenv) para carregar automaticamente as variáveis do arquivo `.env` em desenvolvimento.
 - **Testes:** `testify` (asserts e mocks) + `go-sqlmock` para os testes do adapter de banco.
 - **Containerização:** Docker e Docker Compose.
 
@@ -64,7 +65,7 @@ O núcleo da aplicação (domínio + regras de negócio) não depende de nenhum 
 4. **`internal/core/service`** — Implementação das portas de entrada, contendo as regras de negócio. Depende apenas das portas de saída (nunca de um adapter concreto).
 5. **`internal/adapter/in/http`** — Adapter de entrada: handlers Gin + roteador, traduzem requisições HTTP em chamadas às portas de entrada.
 6. **`internal/adapter/out/postgres`** — Adapter de saída: implementação concreta das portas de saída usando PostgreSQL.
-7. **`internal/config`** — Carrega configuração (porta do servidor, credenciais do banco) a partir de variáveis de ambiente.
+7. **`internal/config`** — Carrega o arquivo `.env` (via `godotenv`, quando presente) e lê a configuração (porta do servidor, credenciais do banco) a partir de variáveis de ambiente.
 8. **`internal/mocks`** — Mocks (testify) das portas de entrada e saída, usados nos testes unitários.
 9. **`cmd/api/main.go`** — *Composition root*: é o único ponto do sistema que conhece e conecta todas as implementações concretas (config → conexão → repository → service → handler → router).
 
@@ -98,7 +99,7 @@ curriculum-go/
 │       └── main.go                        # Composition root
 ├── internal/
 │   ├── config/
-│   │   └── config.go                      # Configuração via variáveis de ambiente
+│   │   └── config.go                      # Carrega .env (godotenv) e lê as variáveis de ambiente
 │   ├── core/
 │   │   ├── domain/
 │   │   │   ├── personal.go
@@ -126,7 +127,7 @@ curriculum-go/
 
 ## ⚙️ Configuração
 
-Nenhuma credencial fica commitada no repositório. A aplicação lê a configuração de variáveis de ambiente:
+Nenhuma credencial fica commitada no repositório. A aplicação carrega automaticamente o arquivo `.env` (via `godotenv`) na inicialização e lê a configuração de variáveis de ambiente:
 
 | Variável       | Obrigatória | Padrão    | Descrição                          |
 |----------------|:-----------:|-----------|-------------------------------------|
@@ -155,8 +156,8 @@ Copie `.env.example` para `.env` e preencha com suas credenciais antes de rodar 
    ```bash
    cp .env.example .env
    # edite o .env com suas credenciais
-   export $(grep -v '^#' .env | xargs)
    ```
+   *O arquivo `.env` é carregado automaticamente pela aplicação (via `godotenv`) — não é necessário exportar as variáveis manualmente.*
 
 3. **Iniciar a aplicação:**
    ```bash
