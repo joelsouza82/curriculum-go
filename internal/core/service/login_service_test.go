@@ -8,6 +8,8 @@ import (
 	"github.com/joelsouza82/curriculum-go/internal/mocks"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestLoginService_GetLoginByID(t *testing.T) {
@@ -101,21 +103,26 @@ func TestLoginService_CreateLogin(t *testing.T) {
 		Password: "newpass",
 	}
 
+	passwordMatcher := func(l domain.Login) bool {
+		return l.Email == loginToCreate.Email &&
+			bcrypt.CompareHashAndPassword([]byte(l.Password), []byte(loginToCreate.Password)) == nil
+	}
+
 	t.Run("Success", func(t *testing.T) {
-		mockRepo.On("CreateLogin", loginToCreate).Return(10, nil).Once()
+		mockRepo.On("CreateLogin", mock.MatchedBy(passwordMatcher)).Return(10, nil).Once()
 
 		createdLogin, err := svc.CreateLogin(loginToCreate)
 
 		assert.NoError(t, err)
 		assert.Equal(t, 10, createdLogin.ID)
 		assert.Equal(t, loginToCreate.Email, createdLogin.Email)
-		assert.Equal(t, loginToCreate.Password, createdLogin.Password)
+		assert.NoError(t, bcrypt.CompareHashAndPassword([]byte(createdLogin.Password), []byte(loginToCreate.Password)))
 		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("Repository Error", func(t *testing.T) {
 		repoError := errors.New("database error")
-		mockRepo.On("CreateLogin", loginToCreate).Return(0, repoError).Once()
+		mockRepo.On("CreateLogin", mock.MatchedBy(passwordMatcher)).Return(0, repoError).Once()
 
 		_, err := svc.CreateLogin(loginToCreate)
 
@@ -135,8 +142,13 @@ func TestLoginService_UpdateLogin(t *testing.T) {
 		Password: "updatedpass",
 	}
 
+	updateMatcher := func(l domain.Login) bool {
+		return l.ID == loginToUpdate.ID && l.Email == loginToUpdate.Email &&
+			bcrypt.CompareHashAndPassword([]byte(l.Password), []byte(loginToUpdate.Password)) == nil
+	}
+
 	t.Run("Success", func(t *testing.T) {
-		mockRepo.On("UpdateLogin", loginToUpdate).Return(loginToUpdate, nil).Once()
+		mockRepo.On("UpdateLogin", mock.MatchedBy(updateMatcher)).Return(loginToUpdate, nil).Once()
 
 		updatedLogin, err := svc.UpdateLogin(loginToUpdate)
 
@@ -148,7 +160,7 @@ func TestLoginService_UpdateLogin(t *testing.T) {
 
 	t.Run("Repository Error", func(t *testing.T) {
 		repoError := errors.New("login not found")
-		mockRepo.On("UpdateLogin", loginToUpdate).Return(domain.Login{}, repoError).Once()
+		mockRepo.On("UpdateLogin", mock.MatchedBy(updateMatcher)).Return(domain.Login{}, repoError).Once()
 
 		_, err := svc.UpdateLogin(loginToUpdate)
 

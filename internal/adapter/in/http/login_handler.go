@@ -21,13 +21,34 @@ func NewLoginHandler(service inport.LoginService) LoginHandler {
 	}
 }
 
+// loginRequest é o payload aceito para criar/atualizar um login.
+type loginRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+// loginResponse é o payload devolvido ao cliente; nunca inclui a senha (nem o hash).
+type loginResponse struct {
+	ID    int    `json:"id"`
+	Email string `json:"email"`
+}
+
+func toLoginResponse(login domain.Login) loginResponse {
+	return loginResponse{ID: login.ID, Email: login.Email}
+}
+
 func (l *LoginHandler) GetLogins(ctx *gin.Context) {
 	logins, err := l.loginService.GetLogins()
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	ctx.JSON(http.StatusOK, logins)
+
+	response := make([]loginResponse, 0, len(logins))
+	for _, login := range logins {
+		response = append(response, toLoginResponse(login))
+	}
+	ctx.JSON(http.StatusOK, response)
 }
 
 func (l *LoginHandler) GetLoginByID(ctx *gin.Context) {
@@ -48,24 +69,23 @@ func (l *LoginHandler) GetLoginByID(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, login)
+	ctx.JSON(http.StatusOK, toLoginResponse(login))
 }
 
 func (l *LoginHandler) CreateLogin(ctx *gin.Context) {
-	var login domain.Login
-	err := ctx.BindJSON(&login)
-	if err != nil {
+	var req loginRequest
+	if err := ctx.BindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	insertedLogin, err := l.loginService.CreateLogin(login)
+	insertedLogin, err := l.loginService.CreateLogin(domain.Login{Email: req.Email, Password: req.Password})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, insertedLogin)
+	ctx.JSON(http.StatusCreated, toLoginResponse(insertedLogin))
 }
 
 func (l *LoginHandler) UpdateLogin(ctx *gin.Context) {
@@ -76,15 +96,13 @@ func (l *LoginHandler) UpdateLogin(ctx *gin.Context) {
 		return
 	}
 
-	var login domain.Login
-	if err := ctx.BindJSON(&login); err != nil {
+	var req loginRequest
+	if err := ctx.BindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	login.ID = loginId
-
-	updatedLogin, err := l.loginService.UpdateLogin(login)
+	updatedLogin, err := l.loginService.UpdateLogin(domain.Login{ID: loginId, Email: req.Email, Password: req.Password})
 	if err != nil {
 		if errors.Is(err, domain.ErrLoginNotFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "Registro de login não encontrado"})
@@ -94,7 +112,7 @@ func (l *LoginHandler) UpdateLogin(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, updatedLogin)
+	ctx.JSON(http.StatusOK, toLoginResponse(updatedLogin))
 }
 
 func (l *LoginHandler) DeleteLogin(ctx *gin.Context) {

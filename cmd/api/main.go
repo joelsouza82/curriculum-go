@@ -29,7 +29,10 @@ func main() {
 	loginService := service.NewLoginService(loginRepository)
 	loginHandler := httpadapter.NewLoginHandler(loginService)
 
-	router := httpadapter.NewRouter(personalHandler, loginHandler)
+	authService := service.NewAuthService(loginRepository, cfg.JWTSecret)
+	authHandler := httpadapter.NewAuthHandler(authService)
+
+	router := httpadapter.NewRouter(personalHandler, loginHandler, authHandler, cfg.JWTSecret)
 
 	if err := router.Run(":" + cfg.ServerPort); err != nil {
 		log.Fatalf("erro ao iniciar servidor: %v", err)

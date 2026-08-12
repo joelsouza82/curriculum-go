@@ -73,6 +73,28 @@ func (lr *LoginRepository) GetLoginByID(id int) (domain.Login, error) {
 	return loginObj, nil
 }
 
+func (lr *LoginRepository) GetLoginByEmail(email string) (domain.Login, error) {
+	query := "SELECT id, email, password FROM login WHERE email=$1"
+	row := lr.connection.QueryRow(query, email)
+
+	var loginObj domain.Login
+	err := row.Scan(
+		&loginObj.ID,
+		&loginObj.Email,
+		&loginObj.Password,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Login{}, domain.ErrLoginNotFound
+		}
+		fmt.Println(err)
+		return domain.Login{}, err
+	}
+
+	return loginObj, nil
+}
+
 func (lr *LoginRepository) CreateLogin(login domain.Login) (int, error) {
 	var id int
 	query, err := lr.connection.Prepare("INSERT INTO login (email, password) VALUES ($1, $2) RETURNING id")

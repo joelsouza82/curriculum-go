@@ -26,6 +26,14 @@ func (m *LoginRepositoryMock) GetLoginByID(id int) (domain.Login, error) {
 	return args.Get(0).(domain.Login), nil
 }
 
+func (m *LoginRepositoryMock) GetLoginByEmail(email string) (domain.Login, error) {
+	args := m.Called(email)
+	if args.Get(1) != nil {
+		return domain.Login{}, args.Error(1)
+	}
+	return args.Get(0).(domain.Login), nil
+}
+
 func (m *LoginRepositoryMock) CreateLogin(login domain.Login) (int, error) {
 	args := m.Called(login)
 	if args.Get(1) != nil {

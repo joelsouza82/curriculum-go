@@ -1,10 +1,12 @@
 package http
 
 import (
+	"github.com/joelsouza82/curriculum-go/internal/adapter/in/http/middleware"
+
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(personalHandler PersonalHandler, loginHandler LoginHandler) *gin.Engine {
+func NewRouter(personalHandler PersonalHandler, loginHandler LoginHandler, authHandler AuthHandler, jwtSecret string) *gin.Engine {
 	router := gin.Default()
 
 	router.GET("/ping", func(c *gin.Context) {
@@ -13,17 +15,23 @@ func NewRouter(personalHandler PersonalHandler, loginHandler LoginHandler) *gin.
 		})
 	})
 
-	router.GET("/personals", personalHandler.GetPersonals)
-	router.GET("/personal/:personalId", personalHandler.GetPersonalByID)
-	router.POST("/personal", personalHandler.CreatePersonal)
-	router.PUT("/personal/:personalId", personalHandler.UpdatePersonal)
-	router.DELETE("/personal/:personalId", personalHandler.DeletePersonal)
-
-	router.GET("/logins", loginHandler.GetLogins)
-	router.GET("/login/:loginId", loginHandler.GetLoginByID)
+	router.POST("/auth/login", authHandler.Login)
 	router.POST("/login", loginHandler.CreateLogin)
-	router.PUT("/login/:loginId", loginHandler.UpdateLogin)
-	router.DELETE("/login/:loginId", loginHandler.DeleteLogin)
+
+	protected := router.Group("/")
+	protected.Use(middleware.RequireAuth(jwtSecret))
+	{
+		protected.GET("/personals", personalHandler.GetPersonals)
+		protected.GET("/personal/:personalId", personalHandler.GetPersonalByID)
+		protected.POST("/personal", personalHandler.CreatePersonal)
+		protected.PUT("/personal/:personalId", personalHandler.UpdatePersonal)
+		protected.DELETE("/personal/:personalId", personalHandler.DeletePersonal)
+
+		protected.GET("/logins", loginHandler.GetLogins)
+		protected.GET("/login/:loginId", loginHandler.GetLoginByID)
+		protected.PUT("/login/:loginId", loginHandler.UpdateLogin)
+		protected.DELETE("/login/:loginId", loginHandler.DeleteLogin)
+	}
 
 	return router
 }
