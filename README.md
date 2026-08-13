@@ -11,6 +11,7 @@ API RESTful em **Go**, migrada do projeto [`go-api`](https://github.com/joelsouz
 - **Framework Web:** [Gin Gonic](https://github.com/gin-gonic/gin) — usado apenas no adapter de entrada HTTP.
 - **Banco de Dados:** [PostgreSQL](https://www.postgresql.org/), acessado via `database/sql` + driver `github.com/lib/pq` no adapter de saída.
 - **Configuração:** [`github.com/joho/godotenv`](https://github.com/joho/godotenv) para carregar automaticamente as variáveis do arquivo `.env` em desenvolvimento.
+- **Autenticação:** [`github.com/golang-jwt/jwt/v5`](https://github.com/golang-jwt/jwt) para emissão/validação de tokens JWT e `golang.org/x/crypto/bcrypt` para hash de senhas.
 - **Testes:** `testify` (asserts e mocks) + `go-sqlmock` para os testes do adapter de banco.
 - **Containerização:** Docker e Docker Compose.
 
@@ -65,9 +66,10 @@ O núcleo da aplicação (domínio + regras de negócio) não depende de nenhum 
 4. **`internal/core/service`** — Implementação das portas de entrada, contendo as regras de negócio. Depende apenas das portas de saída (nunca de um adapter concreto).
 5. **`internal/adapter/in/http`** — Adapter de entrada: handlers Gin + roteador, traduzem requisições HTTP em chamadas às portas de entrada.
 6. **`internal/adapter/out/postgres`** — Adapter de saída: implementação concreta das portas de saída usando PostgreSQL.
-7. **`internal/config`** — Carrega o arquivo `.env` (via `godotenv`, quando presente) e lê a configuração (porta do servidor, credenciais do banco) a partir de variáveis de ambiente.
-8. **`internal/mocks`** — Mocks (testify) das portas de entrada e saída, usados nos testes unitários.
-9. **`cmd/api/main.go`** — *Composition root*: é o único ponto do sistema que conhece e conecta todas as implementações concretas (config → conexão → repository → service → handler → router).
+7. **`internal/adapter/in/http/middleware`** — Middleware `RequireAuth`, que valida o JWT enviado no header `Authorization` e protege as rotas sensíveis.
+8. **`internal/config`** — Carrega o arquivo `.env` (via `godotenv`, quando presente) e lê a configuração (porta do servidor, segredo JWT, credenciais do banco) a partir de variáveis de ambiente.
+9. **`internal/mocks`** — Mocks (testify) das portas de entrada e saída, usados nos testes unitários.
+10. **`cmd/api/main.go`** — *Composition root*: é o único ponto do sistema que conhece e conecta todas as implementações concretas (config → conexão → repository → service → handler → router).
 
 A regra de dependência é sempre **de fora para dentro**: adapters dependem do núcleo através das portas; o núcleo nunca depende de um adapter.
 
@@ -112,6 +114,7 @@ curriculum-go/
 │   ├── adapter/
 │   │   ├── in/
 │   │   │   └── http/                      # Handlers Gin + router
+│   │   │       └── middleware/            # RequireAuth (validação de JWT)
 │   │   └── out/
 │   │       └── postgres/                  # Implementação PostgreSQL
 │   └── mocks/                             # Mocks das portas para testes
@@ -132,6 +135,7 @@ Nenhuma credencial fica commitada no repositório. A aplicação carrega automat
 | Variável       | Obrigatória | Padrão    | Descrição                          |
 |----------------|:-----------:|-----------|-------------------------------------|
 | `SERVER_PORT`  | não         | `8000`    | Porta HTTP do servidor              |
+| `JWT_SECRET`   | sim         | —         | Segredo usado para assinar/validar os tokens JWT |
 | `DB_HOST`      | sim         | —         | Host do PostgreSQL                  |
 | `DB_PORT`      | sim         | —         | Porta do PostgreSQL                 |
 | `DB_USER`      | sim         | —         | Usuário do banco                    |
@@ -203,7 +207,31 @@ go test ./...
 
 ---
 
-### 👤 Informações Pessoais (`/personal` e `/personals`)
+### 🔑 Autenticação (`/auth/login`)
+
+#### `POST /auth/login`
+Autentica com email/senha e devolve um token JWT. **Rota pública**, mas o `POST /login` precisa ter criado o registro previamente (a senha é comparada via bcrypt).
+- **Body:**
+  ```json
+  { "email": "usuario@exemplo.com", "password": "senha" }
+  ```
+- **Resposta Sucesso (`200 OK`):**
+  ```json
+  { "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+  ```
+- **Erro (`401`):** credenciais inválidas.
+
+O token expira em **24 horas** e deve ser enviado nas rotas protegidas abaixo no header:
+```
+Authorization: Bearer <token>
+```
+Sem esse header (ou com token inválido/expirado), a API responde `401 Unauthorized`.
+
+---
+
+### 👤 Informações Pessoais (`/personal` e `/personals`) 🔒
+
+> Todas as rotas abaixo exigem `Authorization: Bearer <token>`.
 
 #### `GET /personals`
 Retorna todas as informações de perfis pessoais armazenadas.
@@ -226,6 +254,11 @@ Remove um perfil pessoal pelo ID. Resposta `204 No Content` ou `404 Not Found`.
 
 ### 🔐 Login (`/login` e `/logins`)
 
+#### `POST /login`
+Cria um novo registro de login (a senha é armazenada com hash bcrypt). Resposta `201 Created`. **Rota pública** — é o cadastro usado depois em `/auth/login`.
+
+> As rotas abaixo exigem `Authorization: Bearer <token>` 🔒.
+
 #### `GET /logins`
 Retorna todos os registros de login armazenados.
 
@@ -233,9 +266,6 @@ Retorna todos os registros de login armazenados.
 Retorna um registro de login específico pelo ID.
 - **Erro (`400`):** ID inválido.
 - **Erro (`404`):** registro não encontrado.
-
-#### `POST /login`
-Cria um novo registro de login. Resposta `201 Created`.
 
 #### `PUT /login/:loginId`
 Atualiza um registro de login existente. Resposta `200 OK` ou `404 Not Found`.
