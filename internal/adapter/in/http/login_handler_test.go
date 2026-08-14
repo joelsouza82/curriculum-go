@@ -42,8 +42,10 @@ func TestLoginHandler_GetLogins(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NotContains(t, w.Body.String(), "pass1")
+		assert.NotContains(t, w.Body.String(), "password")
 
-		var responseLogins []domain.Login
+		var responseLogins []loginResponse
 		err := json.Unmarshal(w.Body.Bytes(), &responseLogins)
 		assert.NoError(t, err)
 		assert.Len(t, responseLogins, 2)
@@ -62,7 +64,7 @@ func TestLoginHandler_GetLogins(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var responseLogins []domain.Login
+		var responseLogins []loginResponse
 		err := json.Unmarshal(w.Body.Bytes(), &responseLogins)
 		assert.NoError(t, err)
 		assert.Len(t, responseLogins, 0)
@@ -106,11 +108,13 @@ func TestLoginHandler_GetLoginByID(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NotContains(t, w.Body.String(), "pass123")
 
-		var responseLogin domain.Login
+		var responseLogin loginResponse
 		err := json.Unmarshal(w.Body.Bytes(), &responseLogin)
 		assert.NoError(t, err)
-		assert.Equal(t, loginMock, responseLogin)
+		assert.Equal(t, loginMock.ID, responseLogin.ID)
+		assert.Equal(t, loginMock.Email, responseLogin.Email)
 
 		mockService.AssertExpectations(t)
 	})
@@ -159,7 +163,7 @@ func TestLoginHandler_CreateLogin(t *testing.T) {
 	router := setupRouter()
 	router.POST("/login", handler.CreateLogin)
 
-	loginToCreate := domain.Login{
+	loginToCreate := loginRequest{
 		Email:    "newuser@example.com",
 		Password: "newpass123",
 	}
@@ -168,9 +172,11 @@ func TestLoginHandler_CreateLogin(t *testing.T) {
 		createdLogin := domain.Login{
 			ID:       10,
 			Email:    "newuser@example.com",
-			Password: "newpass123",
+			Password: "$2a$10$hashedpasswordvalue",
 		}
-		mockService.On("CreateLogin", mock.AnythingOfType("domain.Login")).Return(createdLogin, nil).Once()
+		mockService.On("CreateLogin", mock.MatchedBy(func(l domain.Login) bool {
+			return l.Email == loginToCreate.Email && l.Password == loginToCreate.Password
+		})).Return(createdLogin, nil).Once()
 
 		body, _ := json.Marshal(loginToCreate)
 		req, _ := http.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
@@ -180,8 +186,9 @@ func TestLoginHandler_CreateLogin(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusCreated, w.Code)
+		assert.NotContains(t, w.Body.String(), "hashedpasswordvalue")
 
-		var response domain.Login
+		var response loginResponse
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		assert.NoError(t, err)
 		assert.Equal(t, 10, response.ID)
@@ -201,7 +208,9 @@ func TestLoginHandler_CreateLogin(t *testing.T) {
 
 	t.Run("Internal Server Error", func(t *testing.T) {
 		internalError := errors.New("database error")
-		mockService.On("CreateLogin", mock.AnythingOfType("domain.Login")).Return(domain.Login{}, internalError).Once()
+		mockService.On("CreateLogin", mock.MatchedBy(func(l domain.Login) bool {
+			return l.Email == loginToCreate.Email && l.Password == loginToCreate.Password
+		})).Return(domain.Login{}, internalError).Once()
 
 		body, _ := json.Marshal(loginToCreate)
 		req, _ := http.NewRequest(http.MethodPost, "/login", bytes.NewBuffer(body))
@@ -224,14 +233,16 @@ func TestLoginHandler_UpdateLogin(t *testing.T) {
 	router := setupRouter()
 	router.PUT("/login/:loginId", handler.UpdateLogin)
 
-	loginToUpdate := domain.Login{
-		ID:       1,
+	loginToUpdate := loginRequest{
 		Email:    "updated@example.com",
 		Password: "updatedpass",
 	}
 
 	t.Run("Success", func(t *testing.T) {
-		mockService.On("UpdateLogin", mock.AnythingOfType("domain.Login")).Return(loginToUpdate, nil).Once()
+		updatedLogin := domain.Login{ID: 1, Email: loginToUpdate.Email, Password: "$2a$10$hashedpasswordvalue"}
+		mockService.On("UpdateLogin", mock.MatchedBy(func(l domain.Login) bool {
+			return l.ID == 1 && l.Email == loginToUpdate.Email && l.Password == loginToUpdate.Password
+		})).Return(updatedLogin, nil).Once()
 
 		body, _ := json.Marshal(loginToUpdate)
 		req, _ := http.NewRequest(http.MethodPut, "/login/1", bytes.NewBuffer(body))
@@ -241,8 +252,9 @@ func TestLoginHandler_UpdateLogin(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NotContains(t, w.Body.String(), "hashedpasswordvalue")
 
-		var responseLogin domain.Login
+		var responseLogin loginResponse
 		err := json.Unmarshal(w.Body.Bytes(), &responseLogin)
 		assert.NoError(t, err)
 		assert.Equal(t, loginToUpdate.Email, responseLogin.Email)
@@ -269,7 +281,9 @@ func TestLoginHandler_UpdateLogin(t *testing.T) {
 	})
 
 	t.Run("Not Found", func(t *testing.T) {
-		mockService.On("UpdateLogin", mock.AnythingOfType("domain.Login")).Return(domain.Login{}, domain.ErrLoginNotFound).Once()
+		mockService.On("UpdateLogin", mock.MatchedBy(func(l domain.Login) bool {
+			return l.Email == loginToUpdate.Email && l.Password == loginToUpdate.Password
+		})).Return(domain.Login{}, domain.ErrLoginNotFound).Once()
 
 		body, _ := json.Marshal(loginToUpdate)
 		req, _ := http.NewRequest(http.MethodPut, "/login/1", bytes.NewBuffer(body))
@@ -286,7 +300,9 @@ func TestLoginHandler_UpdateLogin(t *testing.T) {
 
 	t.Run("Internal Server Error", func(t *testing.T) {
 		internalError := errors.New("database error")
-		mockService.On("UpdateLogin", mock.AnythingOfType("domain.Login")).Return(domain.Login{}, internalError).Once()
+		mockService.On("UpdateLogin", mock.MatchedBy(func(l domain.Login) bool {
+			return l.Email == loginToUpdate.Email && l.Password == loginToUpdate.Password
+		})).Return(domain.Login{}, internalError).Once()
 
 		body, _ := json.Marshal(loginToUpdate)
 		req, _ := http.NewRequest(http.MethodPut, "/login/1", bytes.NewBuffer(body))

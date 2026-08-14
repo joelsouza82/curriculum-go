@@ -64,6 +64,58 @@ func TestGetLoginByID(t *testing.T) {
 	})
 }
 
+func TestGetLoginByEmail(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	repo := NewLoginRepository(db)
+
+	loginMock := domain.Login{
+		ID:       1,
+		Email:    "test@example.com",
+		Password: "password123",
+	}
+
+	expectedSQL := regexp.QuoteMeta("SELECT id, email, password FROM login WHERE email=$1")
+
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id", "email", "password"}).
+			AddRow(loginMock.ID, loginMock.Email, loginMock.Password)
+
+		mock.ExpectQuery(expectedSQL).WithArgs(loginMock.Email).WillReturnRows(rows)
+
+		login, err := repo.GetLoginByEmail(loginMock.Email)
+
+		assert.NoError(t, err)
+		assert.Equal(t, loginMock, login)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Not Found", func(t *testing.T) {
+		mock.ExpectQuery(expectedSQL).WithArgs(loginMock.Email).WillReturnError(sql.ErrNoRows)
+
+		_, err := repo.GetLoginByEmail(loginMock.Email)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, domain.ErrLoginNotFound)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("Query Error", func(t *testing.T) {
+		dbError := errors.New("database error")
+		mock.ExpectQuery(expectedSQL).WithArgs(loginMock.Email).WillReturnError(dbError)
+
+		_, err := repo.GetLoginByEmail(loginMock.Email)
+
+		assert.Error(t, err)
+		assert.Equal(t, dbError, err)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
 func TestGetLogins(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

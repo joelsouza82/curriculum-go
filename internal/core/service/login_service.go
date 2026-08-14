@@ -3,6 +3,8 @@ package service
 import (
 	"github.com/joelsouza82/curriculum-go/internal/core/domain"
 	"github.com/joelsouza82/curriculum-go/internal/core/port/out"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 type LoginService struct {
@@ -24,6 +26,12 @@ func (s *LoginService) GetLoginByID(id int) (domain.Login, error) {
 }
 
 func (s *LoginService) CreateLogin(login domain.Login) (domain.Login, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(login.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return domain.Login{}, err
+	}
+	login.Password = string(hashedPassword)
+
 	loginId, err := s.repository.CreateLogin(login)
 	if err != nil {
 		return domain.Login{}, err
@@ -34,6 +42,12 @@ func (s *LoginService) CreateLogin(login domain.Login) (domain.Login, error) {
 }
 
 func (s *LoginService) UpdateLogin(login domain.Login) (domain.Login, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(login.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return domain.Login{}, err
+	}
+	login.Password = string(hashedPassword)
+
 	return s.repository.UpdateLogin(login)
 }
 

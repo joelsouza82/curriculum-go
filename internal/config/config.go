@@ -18,6 +18,7 @@ type DatabaseConfig struct {
 
 type Config struct {
 	ServerPort string
+	JWTSecret  string
 	Database   DatabaseConfig
 }
 
@@ -26,6 +27,7 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		ServerPort: getEnv("SERVER_PORT", "8000"),
+		JWTSecret:  os.Getenv("JWT_SECRET"),
 		Database: DatabaseConfig{
 			Host:     os.Getenv("DB_HOST"),
 			Port:     os.Getenv("DB_PORT"),
@@ -42,6 +44,7 @@ func Load() (Config, error) {
 		"DB_USER":     cfg.Database.User,
 		"DB_PASSWORD": cfg.Database.Password,
 		"DB_NAME":     cfg.Database.Name,
+		"JWT_SECRET":  cfg.JWTSecret,
 	}
 	for name, value := range required {
 		if value == "" {

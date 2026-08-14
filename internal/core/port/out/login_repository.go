@@ -6,6 +6,7 @@ import "github.com/joelsouza82/curriculum-go/internal/core/domain"
 type LoginRepository interface {
 	GetLogins() ([]domain.Login, error)
 	GetLoginByID(id int) (domain.Login, error)
+	GetLoginByEmail(email string) (domain.Login, error)
 	CreateLogin(login domain.Login) (int, error)
 	UpdateLogin(login domain.Login) (domain.Login, error)
 	DeleteLogin(id int) error
