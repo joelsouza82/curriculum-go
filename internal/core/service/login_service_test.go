@@ -109,6 +109,7 @@ func TestLoginService_CreateLogin(t *testing.T) {
 	}
 
 	t.Run("Success", func(t *testing.T) {
+		mockRepo.On("GetLoginByEmail", loginToCreate.Email).Return(domain.Login{}, domain.ErrLoginNotFound).Once()
 		mockRepo.On("CreateLogin", mock.MatchedBy(passwordMatcher)).Return(10, nil).Once()
 
 		createdLogin, err := svc.CreateLogin(loginToCreate)
@@ -120,9 +121,31 @@ func TestLoginService_CreateLogin(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
+	t.Run("Email Already Exists", func(t *testing.T) {
+		existingLogin := domain.Login{ID: 5, Email: loginToCreate.Email, Password: "hashed"}
+		mockRepo.On("GetLoginByEmail", loginToCreate.Email).Return(existingLogin, nil).Once()
+
+		_, err := svc.CreateLogin(loginToCreate)
+
+		assert.ErrorIs(t, err, domain.ErrEmailAlreadyExists)
+		mockRepo.AssertExpectations(t)
+	})
+
 	t.Run("Repository Error", func(t *testing.T) {
 		repoError := errors.New("database error")
+		mockRepo.On("GetLoginByEmail", loginToCreate.Email).Return(domain.Login{}, domain.ErrLoginNotFound).Once()
 		mockRepo.On("CreateLogin", mock.MatchedBy(passwordMatcher)).Return(0, repoError).Once()
+
+		_, err := svc.CreateLogin(loginToCreate)
+
+		assert.Error(t, err)
+		assert.Equal(t, repoError, err)
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("Email Lookup Error", func(t *testing.T) {
+		repoError := errors.New("database error")
+		mockRepo.On("GetLoginByEmail", loginToCreate.Email).Return(domain.Login{}, repoError).Once()
 
 		_, err := svc.CreateLogin(loginToCreate)
 

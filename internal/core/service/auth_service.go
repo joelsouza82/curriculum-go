@@ -11,7 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const tokenExpiration = 24 * time.Hour
+const tokenExpiration = 1 * time.Hour
 
 type AuthService struct {
 	repository out.LoginRepository

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+
 	"github.com/joelsouza82/curriculum-go/internal/core/domain"
 	"github.com/joelsouza82/curriculum-go/internal/core/port/out"
 
@@ -26,6 +28,14 @@ func (s *LoginService) GetLoginByID(id int) (domain.Login, error) {
 }
 
 func (s *LoginService) CreateLogin(login domain.Login) (domain.Login, error) {
+	_, err := s.repository.GetLoginByEmail(login.Email)
+	if err == nil {
+		return domain.Login{}, domain.ErrEmailAlreadyExists
+	}
+	if !errors.Is(err, domain.ErrLoginNotFound) {
+		return domain.Login{}, err
+	}
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(login.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return domain.Login{}, err
