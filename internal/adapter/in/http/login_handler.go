@@ -81,6 +81,10 @@ func (l *LoginHandler) CreateLogin(ctx *gin.Context) {
 
 	insertedLogin, err := l.loginService.CreateLogin(domain.Login{Email: req.Email, Password: req.Password})
 	if err != nil {
+		if errors.Is(err, domain.ErrEmailAlreadyExists) {
+			ctx.JSON(http.StatusConflict, gin.H{"error": "e-mail já cadastrado"})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
