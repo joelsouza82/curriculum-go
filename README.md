@@ -60,7 +60,7 @@ O núcleo da aplicação (domínio + regras de negócio) não depende de nenhum 
 
 ### Camadas
 
-1. **`internal/core/domain`** — Entidades (`Personal`, `Login`) e erros de domínio (`ErrPersonalNotFound`, `ErrLoginNotFound`). Não conhece HTTP, SQL ou nenhum framework.
+1. **`internal/core/domain`** — Entidades (`Personal`, `Login`) e erros de domínio (`ErrPersonalNotFound`, `ErrLoginNotFound`, `ErrInvalidCredentials`, `ErrEmailAlreadyExists`). Não conhece HTTP, SQL ou nenhum framework.
 2. **`internal/core/port/in`** — Portas de entrada (primárias): interfaces que o núcleo expõe para o mundo externo (`PersonalService`, `LoginService`).
 3. **`internal/core/port/out`** — Portas de saída (secundárias): interfaces que o núcleo espera que o mundo externo implemente (`PersonalRepository`, `LoginRepository`).
 4. **`internal/core/service`** — Implementação das portas de entrada, contendo as regras de negócio. Depende apenas das portas de saída (nunca de um adapter concreto).
@@ -256,6 +256,10 @@ Remove um perfil pessoal pelo ID. Resposta `204 No Content` ou `404 Not Found`.
 
 #### `POST /login`
 Cria um novo registro de login (a senha é armazenada com hash bcrypt). Resposta `201 Created`. **Rota pública** — é o cadastro usado depois em `/auth/login`.
+- **Erro (`409`):** já existe um registro de login com o e-mail informado.
+  ```json
+  { "error": "e-mail já cadastrado" }
+  ```
 
 > As rotas abaixo exigem `Authorization: Bearer <token>` 🔒.
 
